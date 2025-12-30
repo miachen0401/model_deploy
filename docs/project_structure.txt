@@ -1,0 +1,66 @@
+Qwen Model Deployment - Modular Architecture
+=============================================
+
+Project Root
+│
+├─── API Layer (Deployment)
+│    └─── app.py
+│         ├─ FastAPI routes
+│         ├─ Request/Response models
+│         └─ Lifespan management
+│
+├─── Core Modules (src/)
+│    │
+│    ├─── config.py
+│    │    └─ Configuration management
+│    │       ├─ Read config.yml
+│    │       ├─ Environment variables
+│    │       └─ Singleton pattern
+│    │
+│    ├─── model.py
+│    │    └─ Model operations
+│    │       ├─ QwenModelHandler class
+│    │       ├─ Load from HuggingFace
+│    │       ├─ Text generation
+│    │       ├─ Model info
+│    │       └─ Singleton pattern
+│    │
+│    └─── analysis/
+│         ├─ __init__.py
+│         └─ example_analyzer.py
+│            └─ Template for data analysis
+│               ├─ Reuses model handler
+│               ├─ Independent scripts
+│               └─ Batch processing
+│
+├─── Tests
+│    └─── tests/
+│         ├─ __init__.py
+│         └─ test_api.py
+│
+├─── Documentation
+│    └─── docs/
+│         ├─ DEPLOYMENT.md
+│         ├─ ARCHITECTURE.md
+│         ├─ SUMMARY.md
+│         └─ RECORD_Change.md
+│
+└─── Utilities
+     ├─ example_usage.py
+     ├─ validate_setup.py
+     └─ test_curl.sh
+
+
+Usage Patterns:
+===============
+
+1. API Deployment:
+   app.py → src.config + src.model → HuggingFace
+
+2. Data Analysis:
+   your_script.py → src.config + src.model → HuggingFace
+
+3. Both share:
+   - Same model instance (memory efficient)
+   - Same configuration
+   - No code duplication
