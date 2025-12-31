@@ -25,11 +25,17 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load model on startup and cleanup on shutdown"""
-    logger.info("Starting model loading process")
+    logger.info("\n" + "=" * 60)
+    logger.info("🌟 Application Startup - Initializing...")
+    logger.info("=" * 60)
 
     try:
         # Get configuration and model handler
+        logger.info("📋 Loading configuration...")
         config = get_config()
+        logger.info(f"   Model: {config.model_name}")
+        logger.info(f"   Port: {config.port}")
+
         model_handler = get_model_handler()
 
         # Load model
@@ -38,7 +44,7 @@ async def lifespan(app: FastAPI):
             hf_token=config.hf_token
         )
 
-        logger.info("Model loaded successfully")
+        logger.info("\n🎉 Application ready to accept requests!")
 
     except Exception as e:
         logger.error(f"Failed to load model: {str(e)}")
@@ -63,7 +69,12 @@ app = FastAPI(
 class GenerationRequest(BaseModel):
     """Request model for text generation"""
     prompt: str = Field(..., description="Input text prompt for generation")
-    max_length: int = Field(100, ge=1, le=2048, description="Maximum length of generated text")
+    max_length: int = Field(
+        64,
+        ge=1,
+        le=2048,
+        description="Maximum total length (input + output). Note: Server enforces max_new_tokens=512 limit"
+    )
     temperature: float = Field(0.7, ge=0.1, le=2.0, description="Sampling temperature")
     top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling probability")
     top_k: int = Field(50, ge=0, le=100, description="Top-k sampling parameter")
@@ -130,36 +141,67 @@ async def model_info():
 @app.post("/generate", response_model=GenerationResponse)
 async def generate_text(request: GenerationRequest):
     """Generate text from the model"""
+    import asyncio
+    from functools import partial
+
+    GEN_SEMAPHORE = asyncio.Semaphore(1)
+
     model_handler = get_model_handler()
     config = get_config()
 
     if not model_handler.is_loaded():
         raise HTTPException(status_code=503, detail="Model not loaded")
 
-    try:
-        logger.info(f"Generating text for prompt: {request.prompt[:50]}...")
+    async with GEN_SEMAPHORE:
+        try:
+            # Enforce max_length limit from config
+            max_length_limit = min(request.max_length, config.max_length)
+            if max_length_limit != request.max_length:
+                logger.warning(f"Capping max_length from {request.max_length} to {max_length_limit}")
 
-        # Generate using model handler
-        generated_texts = model_handler.generate(
-            prompt=request.prompt,
-            max_length=request.max_length,
-            temperature=request.temperature,
-            top_p=request.top_p,
-            top_k=request.top_k,
-            num_return_sequences=request.num_return_sequences
-        )
+            logger.info(f"Generating text for prompt: {request.prompt[:50]}... (max_length={max_length_limit})")
 
-        logger.info(f"Successfully generated {len(generated_texts)} sequence(s)")
+            # Run generation in thread pool with timeout
+            loop = asyncio.get_event_loop()
 
-        return GenerationResponse(
-            generated_texts=generated_texts,
-            model_name=config.model_name,
-            device=model_handler.device
-        )
+            max_new_tokens = min(max_length_limit, config.max_new_tokens)
 
-    except Exception as e:
-        logger.error(f"Error during generation: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
+            generate_func = partial(
+                model_handler.generate,
+                prompt=request.prompt,
+                temperature=request.temperature,
+                top_p=request.top_p,
+                top_k=request.top_k,
+                num_return_sequences=request.num_return_sequences,
+                max_new_tokens=max_new_tokens
+            )
+
+            # Execute with timeout
+            try:
+                generated_texts = await asyncio.wait_for(
+                    loop.run_in_executor(None, generate_func),
+                    timeout=config.generation_timeout
+                )
+            except asyncio.TimeoutError:
+                logger.error(f"Generation timed out after {config.generation_timeout}s")
+                raise HTTPException(
+                    status_code=504,
+                    detail=f"Generation timed out after {config.generation_timeout}s. Try reducing max_length or simplifying the prompt."
+                )
+
+            logger.info(f"Successfully generated {len(generated_texts)} sequence(s)")
+
+            return GenerationResponse(
+                generated_texts=generated_texts,
+                model_name=config.model_name,
+                device=model_handler.device
+            )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Error during generation: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Generation failed: {str(e)}")
 
 
 if __name__ == "__main__":

@@ -1,3 +1,9 @@
 HUGGINGFACE_MODEL:
-  NAME: "Hula0401/finetuned"
+  NAME: "exported_hf"  # Local converted model
   BASE: "Qwen/Qwen2.5-1.5B-Instruct"
+
+GENERATION:
+  MAX_NEW_TOKENS: 512        # Maximum tokens to generate (prevents infinite generation)
+  MAX_LENGTH: 2048           # Maximum total length (input + output)
+  DEFAULT_MAX_LENGTH: 200    # Default max_length for API requests
+  TIMEOUT_SECONDS: 60        # Timeout for generation requests

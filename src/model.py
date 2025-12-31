@@ -8,6 +8,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 logger = logging.getLogger(__name__)
 
+def _select_device() -> str:
+    """Select the best available torch device."""
+    if torch.cuda.is_available():
+        return "cuda"
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
 
 class QwenModelHandler:
     """Handler for Qwen model loading and inference"""
@@ -26,31 +33,50 @@ class QwenModelHandler:
             model_name: Hugging Face model identifier
             hf_token: Hugging Face API token
         """
-        logger.info(f"Loading model: {model_name}")
+        import time
+        start_time = time.time()
+        logger.info("=" * 60)
+        logger.info(f"🚀 Starting model loading: {model_name}")
+        logger.info("=" * 60)
 
         try:
             # Determine device
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-            logger.info(f"Using device: {self.device}")
+            step_start = time.time()
+            self.device = _select_device()
+            logger.info(f"✓ Device selected: {self.device} ({time.time() - step_start:.2f}s)")
 
             # Load tokenizer
+            step_start = time.time()
+            logger.info("📝 Loading tokenizer...")
             self.tokenizer = AutoTokenizer.from_pretrained(
                 model_name,
                 token=hf_token,
                 trust_remote_code=True
             )
-            logger.info("Tokenizer loaded successfully")
+            logger.info(f"✓ Tokenizer loaded (vocab_size={self.tokenizer.vocab_size}, {time.time() - step_start:.2f}s)")
 
             # Load model
+            step_start = time.time()
+            logger.info("🧠 Loading model weights (this may take 15-30s)...")
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 token=hf_token,
                 trust_remote_code=True,
-                torch_dtype=torch.float16 if self.device == "cuda" else torch.float32
+                torch_dtype = torch.bfloat16 if self.device == "cuda" else torch.float32
             ).to(self.device)
 
+            logger.info(f"✓ Model weights loaded ({time.time() - step_start:.2f}s)")
+
+            # Set to evaluation mode
+            step_start = time.time()
+            logger.info("⚙️  Setting model to evaluation mode...")
             self.model.eval()
-            logger.info("Model loaded successfully")
+            logger.info(f"✓ Model ready ({time.time() - step_start:.2f}s)")
+
+            total_time = time.time() - start_time
+            logger.info("=" * 60)
+            logger.info(f"✅ Model loading complete! Total time: {total_time:.2f}s")
+            logger.info("=" * 60)
 
         except Exception as e:
             logger.error(f"Failed to load model: {str(e)}")
@@ -63,18 +89,20 @@ class QwenModelHandler:
         temperature: float = 0.7,
         top_p: float = 0.9,
         top_k: int = 50,
-        num_return_sequences: int = 1
+        num_return_sequences: int = 1,
+        max_new_tokens: Optional[int] = None
     ) -> List[str]:
         """
         Generate text from the model.
 
         Args:
             prompt: Input text prompt
-            max_length: Maximum length of generated text
+            max_length: Maximum total length (input + output) - DEPRECATED, use max_new_tokens
             temperature: Sampling temperature
             top_p: Nucleus sampling probability
             top_k: Top-k sampling parameter
             num_return_sequences: Number of sequences to return
+            max_new_tokens: Maximum new tokens to generate (overrides max_length)
 
         Returns:
             List of generated text strings
@@ -93,17 +121,31 @@ class QwenModelHandler:
                 max_length=2048
             ).to(self.device)
 
-            # Generate
+            # Determine max tokens to generate
+            # Use max_new_tokens if provided, otherwise derive from max_length
+            input_length = inputs['input_ids'].shape[1]
+            if max_new_tokens is not None:
+                tokens_to_generate = min(max_new_tokens, 512)  # Hard limit: 512 tokens
+            else:
+                tokens_to_generate = min(max_length - input_length, 512)  # Hard limit: 512 tokens
+
+            tokens_to_generate = max(1, tokens_to_generate)  # At least 1 token
+
+            logger.debug(f"Input length: {input_length}, will generate up to {tokens_to_generate} new tokens")
+
+            # Generate with timeout protection
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
-                    max_length=max_length,
+                    max_new_tokens=tokens_to_generate,
                     temperature=temperature,
                     top_p=top_p,
                     top_k=top_k,
                     num_return_sequences=num_return_sequences,
                     do_sample=True,
-                    pad_token_id=self.tokenizer.eos_token_id
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    eos_token_id=self.tokenizer.eos_token_id,
+                    early_stopping=True  # Stop when EOS token is generated
                 )
 
             # Decode outputs

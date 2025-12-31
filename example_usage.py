@@ -99,9 +99,7 @@ def example_conversational(api_url: str):
 
     conversation_history = []
     prompts = [
-        "Hello! Can you help me understand neural networks?",
-        "What are the main components of a neural network?",
-        "How does backpropagation work?"
+        "Hello! how are you?"
     ]
 
     for user_input in prompts:
