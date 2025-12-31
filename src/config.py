@@ -54,18 +54,13 @@ class Config:
 
     @property
     def max_new_tokens(self) -> int:
-        """Get maximum new tokens to generate"""
+        """Get maximum new tokens to generate (hard limit)"""
         return self._config.get('GENERATION', {}).get('MAX_NEW_TOKENS', 512)
 
     @property
-    def max_length(self) -> int:
-        """Get maximum total length (input + output)"""
-        return self._config.get('GENERATION', {}).get('MAX_LENGTH', 2048)
-
-    @property
-    def default_max_length(self) -> int:
-        """Get default max_length for API requests"""
-        return self._config.get('GENERATION', {}).get('DEFAULT_MAX_LENGTH', 200)
+    def default_max_new_tokens(self) -> int:
+        """Get default max_new_tokens for API requests"""
+        return self._config.get('GENERATION', {}).get('DEFAULT_MAX_NEW_TOKENS', 64)
 
     @property
     def generation_timeout(self) -> int:

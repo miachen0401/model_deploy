@@ -2,7 +2,7 @@
 Model loading and inference logic.
 """
 import logging
-from typing import Optional, List
+from typing import List
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
@@ -85,24 +85,22 @@ class QwenModelHandler:
     def generate(
         self,
         prompt: str,
-        max_length: int = 100,
+        max_new_tokens: int = 64,
         temperature: float = 0.7,
         top_p: float = 0.9,
         top_k: int = 50,
-        num_return_sequences: int = 1,
-        max_new_tokens: Optional[int] = None
+        num_return_sequences: int = 1
     ) -> List[str]:
         """
         Generate text from the model.
 
         Args:
             prompt: Input text prompt
-            max_length: Maximum total length (input + output) - DEPRECATED, use max_new_tokens
+            max_new_tokens: Maximum new tokens to generate
             temperature: Sampling temperature
             top_p: Nucleus sampling probability
             top_k: Top-k sampling parameter
             num_return_sequences: Number of sequences to return
-            max_new_tokens: Maximum new tokens to generate (overrides max_length)
 
         Returns:
             List of generated text strings
@@ -121,14 +119,9 @@ class QwenModelHandler:
                 max_length=2048
             ).to(self.device)
 
-            # Determine max tokens to generate
-            # Use max_new_tokens if provided, otherwise derive from max_length
+            # Enforce hard limit on tokens to generate
             input_length = inputs['input_ids'].shape[1]
-            if max_new_tokens is not None:
-                tokens_to_generate = min(max_new_tokens, 512)  # Hard limit: 512 tokens
-            else:
-                tokens_to_generate = min(max_length - input_length, 512)  # Hard limit: 512 tokens
-
+            tokens_to_generate = min(max_new_tokens, 512)  # Hard limit: 512 tokens
             tokens_to_generate = max(1, tokens_to_generate)  # At least 1 token
 
             logger.debug(f"Input length: {input_length}, will generate up to {tokens_to_generate} new tokens")

@@ -1,27 +1,41 @@
-Qwen Model Deployment - Modular Architecture
-=============================================
+Qwen Model Deployment - Modular Architecture with Safety Features
+=====================================================================
 
 Project Root
+│
+├─── Package Management
+│    ├─── pyproject.toml (UV - modern)
+│    └─── requirements.txt (pip - legacy)
+│
+├─── Configuration
+│    ├─── config.yml (model, generation limits)
+│    └─── .env (HF tokens, port)
 │
 ├─── API Layer (Deployment)
 │    └─── app.py
 │         ├─ FastAPI routes
-│         ├─ Request/Response models
-│         └─ Lifespan management
+│         ├─ Request/Response models (Pydantic)
+│         ├─ Lifespan management
+│         ├─ Semaphore-based concurrency control
+│         ├─ Timeout protection (60s)
+│         └─ Progress visualization
 │
 ├─── Core Modules (src/)
 │    │
 │    ├─── config.py
 │    │    └─ Configuration management
 │    │       ├─ Read config.yml
-│    │       ├─ Environment variables
+│    │       ├─ Environment variables (HF_TOKEN, PORT)
+│    │       ├─ Generation limits (max_new_tokens, timeout)
 │    │       └─ Singleton pattern
 │    │
 │    ├─── model.py
 │    │    └─ Model operations
 │    │       ├─ QwenModelHandler class
-│    │       ├─ Load from HuggingFace
-│    │       ├─ Text generation
+│    │       ├─ Load from HuggingFace (with progress)
+│    │       ├─ Text generation (max_new_tokens only)
+│    │       ├─ Safety features (512 token limit, early stopping)
+│    │       ├─ Device selection (CUDA > MPS > CPU)
 │    │       ├─ Model info
 │    │       └─ Singleton pattern
 │    │
@@ -33,6 +47,26 @@ Project Root
 │               ├─ Independent scripts
 │               └─ Batch processing
 │
+├─── Model Conversion Pipeline (model/)
+│    │
+│    ├─── download_hf_model.py
+│    │    └─ Download models from HuggingFace
+│    │       ├─ Snapshot download to local cache
+│    │       ├─ Authentication via HF_TOKEN
+│    │       └─ Resume support
+│    │
+│    └─── export_ckpt_hf.py
+│         └─ Convert RL checkpoints to HF format
+│            ├─ Load base model architecture
+│            ├─ Apply actor checkpoint weights
+│            ├─ Strip wrapper prefixes (module., actor., etc.)
+│            ├─ Export to safetensors format
+│            └─ Validation via load test
+│
+├─── Generated Artifacts
+│    ├─── hf_repo/ (downloaded raw checkpoints)
+│    └─── exported_hf/ (converted HF model)
+│
 ├─── Tests
 │    └─── tests/
 │         ├─ __init__.py
@@ -40,27 +74,93 @@ Project Root
 │
 ├─── Documentation
 │    └─── docs/
-│         ├─ DEPLOYMENT.md
-│         ├─ ARCHITECTURE.md
-│         ├─ SUMMARY.md
-│         └─ RECORD_Change.md
+│         ├─ ARCHITECTURE.md (comprehensive design doc)
+│         ├─ project_structure.txt (this file)
+│         └─ RECORD_Change.md (change history)
 │
 └─── Utilities
-     ├─ example_usage.py
-     ├─ validate_setup.py
-     └─ test_curl.sh
+     ├─ example_usage.py (API client examples)
+     ├─ validate_setup.py (pre-deployment checks)
+     └─ test_curl.sh (API testing with curl)
 
 
-Usage Patterns:
-===============
+Data Flow Patterns:
+===================
 
-1. API Deployment:
-   app.py → src.config + src.model → HuggingFace
+1. API Request Flow:
+   User → app.py → [Semaphore] → src.model → Safety Checks → HF Model → Response
 
-2. Data Analysis:
-   your_script.py → src.config + src.model → HuggingFace
+2. Model Conversion Flow:
+   HF Checkpoint → download_hf_model.py → hf_repo/
+   → export_ckpt_hf.py → exported_hf/ → config.yml
 
-3. Both share:
+3. Data Analysis:
+   your_script.py → src.config + src.model → HF Model → Results
+
+4. All patterns share:
    - Same model instance (memory efficient)
-   - Same configuration
+   - Same configuration (config.yml + .env)
+   - Same safety limits (512 tokens, 60s timeout)
    - No code duplication
+
+
+Safety Features:
+================
+
+API Level:
+  ├─ Semaphore: Limits concurrent requests (OCCUPANCY_SEMAPHORE)
+  ├─ Timeout: 60-second request timeout
+  ├─ Validation: Pydantic models with parameter limits
+  └─ Error handling: Clear 504/500 error messages
+
+Model Level:
+  ├─ Token limit: Hard cap of 512 new tokens
+  ├─ Early stopping: Stops at EOS token
+  ├─ Input truncation: Prompts limited to 2048 tokens
+  └─ Progress logging: Shows input/output token counts
+
+Configuration:
+  ├─ MAX_NEW_TOKENS: 512 (hard limit)
+  ├─ DEFAULT_MAX_NEW_TOKENS: 64 (API default)
+  ├─ TIMEOUT_SECONDS: 60 (request timeout)
+  └─ OCCUPANCY_SEMAPHORE: 1 (concurrent requests)
+
+
+Key Design Principles:
+======================
+
+1. Separation of Concerns:
+   - API: HTTP routing + request limiting
+   - Model: Inference operations only
+   - Config: Configuration management
+   - Conversion: Model preparation pipeline
+
+2. Safety First:
+   - Multiple protection layers (API + Model)
+   - Clear error messages and timeouts
+   - Progress visibility during operations
+
+3. Singleton Pattern:
+   - Single model instance (memory efficient)
+   - Global config instance
+   - Consistent state across application
+
+4. Modern Tooling:
+   - UV for fast package management
+   - pyproject.toml for modern Python packaging
+   - Pydantic for request validation
+   - SafeTensors for model storage
+
+
+Package Management Commands:
+=============================
+
+UV (Recommended):
+  uv sync                              # Install dependencies
+  uv run python app.py                 # Run API server
+  uv run python model/download_hf_model.py   # Download model
+  uv run python model/export_ckpt_hf.py      # Convert checkpoint
+
+pip (Legacy):
+  pip install -r requirements.txt      # Install dependencies
+  python app.py                        # Run API server

@@ -69,11 +69,11 @@ app = FastAPI(
 class GenerationRequest(BaseModel):
     """Request model for text generation"""
     prompt: str = Field(..., description="Input text prompt for generation")
-    max_length: int = Field(
+    max_new_tokens: int = Field(
         64,
         ge=1,
-        le=2048,
-        description="Maximum total length (input + output). Note: Server enforces max_new_tokens=512 limit"
+        le=512,
+        description="Maximum new tokens to generate (hard limit: 512)"
     )
     temperature: float = Field(0.7, ge=0.1, le=2.0, description="Sampling temperature")
     top_p: float = Field(0.9, ge=0.0, le=1.0, description="Nucleus sampling probability")
@@ -144,7 +144,7 @@ async def generate_text(request: GenerationRequest):
     import asyncio
     from functools import partial
 
-    GEN_SEMAPHORE = asyncio.Semaphore(1)
+    GEN_SEMAPHORE = asyncio.Semaphore(config.occupancy_semaphore)
 
     model_handler = get_model_handler()
     config = get_config()
@@ -154,26 +154,24 @@ async def generate_text(request: GenerationRequest):
 
     async with GEN_SEMAPHORE:
         try:
-            # Enforce max_length limit from config
-            max_length_limit = min(request.max_length, config.max_length)
-            if max_length_limit != request.max_length:
-                logger.warning(f"Capping max_length from {request.max_length} to {max_length_limit}")
+            # Enforce max_new_tokens limit from config
+            max_new_tokens = min(request.max_new_tokens, config.max_new_tokens)
+            if max_new_tokens != request.max_new_tokens:
+                logger.warning(f"Capping max_new_tokens from {request.max_new_tokens} to {max_new_tokens}")
 
-            logger.info(f"Generating text for prompt: {request.prompt[:50]}... (max_length={max_length_limit})")
+            logger.info(f"Generating text for prompt: {request.prompt[:50]}... (max_new_tokens={max_new_tokens})")
 
             # Run generation in thread pool with timeout
             loop = asyncio.get_event_loop()
 
-            max_new_tokens = min(max_length_limit, config.max_new_tokens)
-
             generate_func = partial(
                 model_handler.generate,
                 prompt=request.prompt,
+                max_new_tokens=max_new_tokens,
                 temperature=request.temperature,
                 top_p=request.top_p,
                 top_k=request.top_k,
-                num_return_sequences=request.num_return_sequences,
-                max_new_tokens=max_new_tokens
+                num_return_sequences=request.num_return_sequences
             )
 
             # Execute with timeout
@@ -186,7 +184,7 @@ async def generate_text(request: GenerationRequest):
                 logger.error(f"Generation timed out after {config.generation_timeout}s")
                 raise HTTPException(
                     status_code=504,
-                    detail=f"Generation timed out after {config.generation_timeout}s. Try reducing max_length or simplifying the prompt."
+                    detail=f"Generation timed out after {config.generation_timeout}s. Try reducing max_new_tokens or simplifying the prompt."
                 )
 
             logger.info(f"Successfully generated {len(generated_texts)} sequence(s)")

@@ -3,7 +3,7 @@ HUGGINGFACE_MODEL:
   BASE: "Qwen/Qwen2.5-1.5B-Instruct"
 
 GENERATION:
-  MAX_NEW_TOKENS: 512        # Maximum tokens to generate (prevents infinite generation)
-  MAX_LENGTH: 2048           # Maximum total length (input + output)
-  DEFAULT_MAX_LENGTH: 200    # Default max_length for API requests
-  TIMEOUT_SECONDS: 60        # Timeout for generation requests
+  MAX_NEW_TOKENS: 512        # Maximum new tokens to generate (hard limit, prevents infinite generation)
+  DEFAULT_MAX_NEW_TOKENS: 64 # Default max_new_tokens for API requests
+  TIMEOUT_SECONDS: 60        # Timeout for generation requests (in seconds)
+  OCCUPANCY_SEMAPHORE: 1     # Maximum number of concurrent generation requests
