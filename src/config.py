@@ -67,6 +67,11 @@ class Config:
         """Get timeout for generation requests in seconds"""
         return self._config.get('GENERATION', {}).get('TIMEOUT_SECONDS', 60)
 
+    @property
+    def occupancy_semaphore(self) -> int:
+        """Get maximum number of concurrent generation requests"""
+        return self._config.get('GENERATION', {}).get('OCCUPANCY_SEMAPHORE', 1)
+
     def get(self, key: str, default=None):
         """Get configuration value by key"""
         return self._config.get(key, default)

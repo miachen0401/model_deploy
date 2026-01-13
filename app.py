@@ -144,10 +144,10 @@ async def generate_text(request: GenerationRequest):
     import asyncio
     from functools import partial
 
-    GEN_SEMAPHORE = asyncio.Semaphore(config.occupancy_semaphore)
-
     model_handler = get_model_handler()
     config = get_config()
+
+    GEN_SEMAPHORE = asyncio.Semaphore(config.occupancy_semaphore)
 
     if not model_handler.is_loaded():
         raise HTTPException(status_code=503, detail="Model not loaded")

@@ -20,7 +20,7 @@ def example_basic_generation(api_url: str):
 
     payload = {
         "prompt": "What is artificial intelligence?",
-        "max_length": 100
+        "max_new_tokens": 100
     }
 
     response = requests.post(f"{api_url}/generate", json=payload)
@@ -43,7 +43,7 @@ def example_custom_parameters(api_url: str):
 
     payload = {
         "prompt": "Write a creative story about a robot:",
-        "max_length": 200,
+        "max_new_tokens": 200,
         "temperature": 0.9,  # Higher temperature for more creative output
         "top_p": 0.95,
         "top_k": 50,
@@ -72,7 +72,7 @@ def example_multiple_sequences(api_url: str):
 
     payload = {
         "prompt": "The future of technology is",
-        "max_length": 80,
+        "max_new_tokens": 80,
         "temperature": 0.8,
         "num_return_sequences": 3  # Generate 3 different continuations
     }
@@ -112,7 +112,7 @@ def example_conversational(api_url: str):
 
         payload = {
             "prompt": full_prompt,
-            "max_length": 150,
+            "max_new_tokens": 150,
             "temperature": 0.7
         }
 

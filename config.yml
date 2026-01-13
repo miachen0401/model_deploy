@@ -1,5 +1,5 @@
 HUGGINGFACE_MODEL:
-  NAME: "exported_hf"  # Local converted model
+  NAME: "model"  # Local converted model
   BASE: "Qwen/Qwen2.5-1.5B-Instruct"
 
 GENERATION:
@@ -7,3 +7,7 @@ GENERATION:
   DEFAULT_MAX_NEW_TOKENS: 64 # Default max_new_tokens for API requests
   TIMEOUT_SECONDS: 60        # Timeout for generation requests (in seconds)
   OCCUPANCY_SEMAPHORE: 1     # Maximum number of concurrent generation requests
+
+Fine-tune Model:
+  NAME: "Hula0401/qwen-1.5b-finetuned-news1.0"
+  BASE: "Qwen/Qwen2.5-1.5B-Instruct"
