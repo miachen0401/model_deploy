@@ -8,6 +8,14 @@ GENERATION:
   TIMEOUT_SECONDS: 60        # Timeout for generation requests (in seconds)
   OCCUPANCY_SEMAPHORE: 1     # Maximum number of concurrent generation requests
 
+VLLM:
+  GPU_MEMORY_UTILIZATION: 0.90  # Use 90% of GPU memory (RTX 4080 has plenty)
+  MAX_MODEL_LEN: 4096           # Maximum context length
+  DTYPE: "bfloat16"             # Data type for inference (bfloat16 for Ampere+ GPUs)
+  TENSOR_PARALLEL_SIZE: 1       # Number of GPUs (1 for single 4080)
+  MAX_NUM_SEQS: 256             # Maximum number of sequences to process in parallel
+  ENABLE_PREFIX_CACHING: true   # Enable prefix caching for better performance
+
 Fine-tune Model:
   NAME: "Hula0401/qwen-1.5b-finetuned-news1.0"
   BASE: "Qwen/Qwen2.5-1.5B-Instruct"

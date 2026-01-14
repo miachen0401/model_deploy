@@ -4,17 +4,19 @@ version = "0.1.0"
 description = "Reinforcement Learning Model Service"
 requires-python = ">=3.9"
 dependencies = [
-    "fastapi==0.109.0",
-    "uvicorn[standard]==0.27.0",
-    "transformers==4.37.0",
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "transformers>=4.56.0",
     "torch>=2.2.0",
-    "pyyaml==6.0.1",
-    "python-dotenv==1.0.0",
-    "pydantic==2.5.3",
-    "accelerate==0.26.1",
+    "pyyaml>=6.0.1",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.10.0",
+    "accelerate>=0.26.1",
     "numpy<2", # Pin to 1.x for compatibility with compiled modules
     "huggingface-hub>=0.36.0",
     "safetensors>=0.7.0",
+    "vllm>=0.6.0",
+    "requests>=2.31.0",
 ]
 
 [build-system]
