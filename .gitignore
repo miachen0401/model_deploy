@@ -54,3 +54,6 @@ models/
 hf_repo/
 model/
 Qwen1.5B/
+
+# mcp
+.mcp.json
