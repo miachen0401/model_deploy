@@ -370,6 +370,296 @@ class BenchmarkVisualizer:
 
         logger.info(f"Confidence distribution plot saved to {filepath}")
 
+    def plot_calibration_curve(
+        self,
+        predictions_df: pd.DataFrame,
+        filename: str = "calibration_curve.png",
+        n_bins: int = 10,
+    ):
+        """
+        Plot calibration curve (reliability diagram) with Expected Calibration Error.
+
+        Args:
+            predictions_df: DataFrame with predictions and confidences
+            filename: Output filename
+            n_bins: Number of confidence bins
+        """
+        logger.info("Generating calibration curve...")
+
+        if "prediction_confidence" not in predictions_df.columns:
+            logger.warning("No confidence column found")
+            return
+
+        confidences = predictions_df["prediction_confidence"].values
+        correct = (
+            predictions_df["category"] == predictions_df["predicted_category"]
+        ).values
+
+        # Create bins
+        bin_edges = np.linspace(0, 1, n_bins + 1)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        # Calculate empirical accuracy per bin
+        bin_accuracies = []
+        bin_confidences = []
+        bin_counts = []
+
+        for i in range(n_bins):
+            mask = (confidences >= bin_edges[i]) & (confidences < bin_edges[i + 1])
+            if i == n_bins - 1:  # Include right edge in last bin
+                mask = (confidences >= bin_edges[i]) & (confidences <= bin_edges[i + 1])
+
+            if mask.sum() > 0:
+                bin_acc = correct[mask].mean()
+                bin_conf = confidences[mask].mean()
+                bin_accuracies.append(bin_acc)
+                bin_confidences.append(bin_conf)
+                bin_counts.append(mask.sum())
+            else:
+                bin_accuracies.append(None)
+                bin_confidences.append(bin_centers[i])
+                bin_counts.append(0)
+
+        # Calculate Expected Calibration Error (ECE)
+        ece = 0.0
+        total_samples = len(confidences)
+        for i, count in enumerate(bin_counts):
+            if count > 0 and bin_accuracies[i] is not None:
+                ece += (count / total_samples) * abs(bin_confidences[i] - bin_accuracies[i])
+
+        # Create figure
+        fig, ax = plt.subplots(figsize=(10, 10))
+
+        # Plot perfect calibration line
+        ax.plot([0, 1], [0, 1], "k--", label="Perfect Calibration", linewidth=2)
+
+        # Plot empirical calibration
+        valid_indices = [i for i, acc in enumerate(bin_accuracies) if acc is not None]
+        valid_confs = [bin_confidences[i] for i in valid_indices]
+        valid_accs = [bin_accuracies[i] for i in valid_indices]
+        valid_counts = [bin_counts[i] for i in valid_indices]
+
+        if valid_confs:
+            # Plot line
+            ax.plot(valid_confs, valid_accs, "o-", linewidth=2, markersize=8,
+                   color="steelblue", label="Model Calibration")
+
+            # Add bar chart showing sample distribution
+            ax2 = ax.twinx()
+            ax2.bar(bin_centers, bin_counts, width=(bin_edges[1] - bin_edges[0]),
+                   alpha=0.3, color="gray", label="Sample Count")
+            ax2.set_ylabel("Number of Samples", fontsize=12)
+            ax2.legend(loc="upper left")
+
+        ax.set_xlabel("Predicted Confidence", fontsize=12)
+        ax.set_ylabel("Empirical Accuracy", fontsize=12)
+        ax.set_title(
+            f"Calibration Curve (Reliability Diagram)\nECE: {ece:.4f}",
+            fontsize=14,
+            pad=20,
+        )
+        ax.set_xlim([0, 1])
+        ax.set_ylim([0, 1])
+        ax.legend(loc="upper right")
+        ax.grid(alpha=0.3)
+
+        plt.tight_layout()
+
+        filepath = self.output_dir / filename
+        plt.savefig(filepath, dpi=300, bbox_inches="tight")
+        plt.close()
+
+        logger.info(f"Calibration curve saved to {filepath} (ECE: {ece:.4f})")
+
+    def plot_confidence_correctness(
+        self,
+        predictions_df: pd.DataFrame,
+        filename: str = "confidence_correctness.png",
+    ):
+        """
+        Plot confidence distributions for correct vs incorrect predictions.
+
+        Args:
+            predictions_df: DataFrame with predictions and confidences
+            filename: Output filename
+        """
+        logger.info("Generating confidence vs correctness analysis...")
+
+        if "prediction_confidence" not in predictions_df.columns:
+            logger.warning("No confidence column found")
+            return
+
+        confidences = predictions_df["prediction_confidence"].values
+        correct = (
+            predictions_df["category"] == predictions_df["predicted_category"]
+        ).values
+
+        correct_conf = confidences[correct]
+        incorrect_conf = confidences[~correct]
+
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+        # Plot 1: Overlapping histograms
+        ax1.hist(correct_conf, bins=30, alpha=0.6, color="green",
+                label=f"Correct (n={len(correct_conf)})", edgecolor="black")
+        ax1.hist(incorrect_conf, bins=30, alpha=0.6, color="red",
+                label=f"Incorrect (n={len(incorrect_conf)})", edgecolor="black")
+
+        ax1.axvline(np.mean(correct_conf), color="green", linestyle="--",
+                   linewidth=2, label=f"Correct Mean: {np.mean(correct_conf):.3f}")
+        ax1.axvline(np.mean(incorrect_conf), color="red", linestyle="--",
+                   linewidth=2, label=f"Incorrect Mean: {np.mean(incorrect_conf):.3f}")
+
+        ax1.set_xlabel("Prediction Confidence", fontsize=12)
+        ax1.set_ylabel("Frequency", fontsize=12)
+        ax1.set_title("Confidence Distribution by Correctness", fontsize=14)
+        ax1.legend()
+        ax1.grid(axis="y", alpha=0.3)
+
+        # Plot 2: Box plots
+        box_data = [correct_conf, incorrect_conf]
+        bp = ax2.boxplot(box_data, labels=["Correct", "Incorrect"],
+                        patch_artist=True, widths=0.6)
+
+        # Color boxes
+        bp["boxes"][0].set_facecolor("lightgreen")
+        bp["boxes"][1].set_facecolor("lightcoral")
+
+        # Add statistics text
+        stats_text = (
+            f"Correct:\n"
+            f"  Mean: {np.mean(correct_conf):.3f}\n"
+            f"  Median: {np.median(correct_conf):.3f}\n"
+            f"  Std: {np.std(correct_conf):.3f}\n\n"
+            f"Incorrect:\n"
+            f"  Mean: {np.mean(incorrect_conf):.3f}\n"
+            f"  Median: {np.median(incorrect_conf):.3f}\n"
+            f"  Std: {np.std(incorrect_conf):.3f}"
+        )
+        ax2.text(0.02, 0.98, stats_text, transform=ax2.transAxes,
+                fontsize=10, verticalalignment="top",
+                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.5))
+
+        ax2.set_ylabel("Prediction Confidence", fontsize=12)
+        ax2.set_title("Confidence Statistics by Correctness", fontsize=14)
+        ax2.grid(axis="y", alpha=0.3)
+
+        plt.tight_layout()
+
+        filepath = self.output_dir / filename
+        plt.savefig(filepath, dpi=300, bbox_inches="tight")
+        plt.close()
+
+        logger.info(f"Confidence vs correctness plot saved to {filepath}")
+
+    def plot_latency_distribution(
+        self,
+        metrics: Dict,
+        filename: str = "latency_distribution.png",
+    ):
+        """
+        Plot inference latency distribution and statistics.
+
+        Args:
+            metrics: Metrics dictionary containing latency data
+            filename: Output filename
+        """
+        logger.info("Generating latency distribution plot...")
+
+        latency_data = metrics.get("latency", {})
+        if not latency_data or "per_batch" not in latency_data:
+            logger.warning("No latency data found in metrics")
+            return
+
+        latencies = latency_data["per_batch"]
+
+        if not latencies:
+            logger.warning("Empty latency data")
+            return
+
+        # Calculate statistics
+        p50 = np.percentile(latencies, 50)
+        p90 = np.percentile(latencies, 90)
+        p99 = np.percentile(latencies, 99)
+        mean_lat = np.mean(latencies)
+        std_lat = np.std(latencies)
+
+        # Create figure with two subplots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+        # Plot 1: Histogram with density
+        ax1.hist(latencies, bins=30, alpha=0.7, color="steelblue",
+                edgecolor="black", density=True)
+
+        # Add KDE
+        from scipy import stats as scipy_stats
+        kde = scipy_stats.gaussian_kde(latencies)
+        x_range = np.linspace(min(latencies), max(latencies), 200)
+        ax1.plot(x_range, kde(x_range), 'r-', linewidth=2, label="KDE")
+
+        # Add percentile lines
+        ax1.axvline(p50, color="green", linestyle="--", linewidth=2,
+                   label=f"p50: {p50:.3f}s")
+        ax1.axvline(p90, color="orange", linestyle="--", linewidth=2,
+                   label=f"p90: {p90:.3f}s")
+        ax1.axvline(p99, color="red", linestyle="--", linewidth=2,
+                   label=f"p99: {p99:.3f}s")
+
+        ax1.set_xlabel("Latency (seconds)", fontsize=12)
+        ax1.set_ylabel("Density", fontsize=12)
+        ax1.set_title("Inference Latency Distribution", fontsize=14)
+        ax1.legend()
+        ax1.grid(axis="y", alpha=0.3)
+
+        # Plot 2: Box plot and statistics
+        bp = ax2.boxplot([latencies], vert=True, patch_artist=True, widths=0.5)
+        bp["boxes"][0].set_facecolor("lightblue")
+
+        # Add statistics table
+        stats_text = (
+            f"Latency Statistics:\n"
+            f"{'─' * 30}\n"
+            f"Mean:     {mean_lat:.4f} s\n"
+            f"Std Dev:  {std_lat:.4f} s\n"
+            f"Min:      {min(latencies):.4f} s\n"
+            f"Max:      {max(latencies):.4f} s\n"
+            f"{'─' * 30}\n"
+            f"p50:      {p50:.4f} s\n"
+            f"p90:      {p90:.4f} s\n"
+            f"p99:      {p99:.4f} s\n"
+        )
+
+        # Add tokens/second if available
+        if "tokens_per_second" in latency_data:
+            tps = latency_data["tokens_per_second"]
+            stats_text += f"{'─' * 30}\n"
+            stats_text += f"Tokens/sec: {tps:.2f}"
+
+        # Add throughput if available
+        if "total_samples" in latency_data and "total_time" in latency_data:
+            throughput = latency_data["total_samples"] / latency_data["total_time"]
+            stats_text += f"\nThroughput: {throughput:.2f} samples/s"
+
+        ax2.text(1.5, 0.5, stats_text, transform=ax2.transData,
+                fontsize=11, verticalalignment="center",
+                bbox=dict(boxstyle="round", facecolor="wheat", alpha=0.8),
+                family="monospace")
+
+        ax2.set_ylabel("Latency (seconds)", fontsize=12)
+        ax2.set_title("Latency Statistics", fontsize=14)
+        ax2.set_xticklabels(["Inference"])
+        ax2.grid(axis="y", alpha=0.3)
+
+        plt.tight_layout()
+
+        filepath = self.output_dir / filename
+        plt.savefig(filepath, dpi=300, bbox_inches="tight")
+        plt.close()
+
+        logger.info(f"Latency distribution plot saved to {filepath}")
+        logger.info(f"Latency p50: {p50:.3f}s, p90: {p90:.3f}s, p99: {p99:.3f}s")
+
     def generate_all_plots(
         self,
         metrics: Dict,
@@ -410,6 +700,14 @@ class BenchmarkVisualizer:
         # Confidence distribution (if predictions available)
         if predictions_df is not None:
             self.plot_confidence_distribution(predictions_df)
+
+            # New visualizations
+            self.plot_calibration_curve(predictions_df)
+            self.plot_confidence_correctness(predictions_df)
+
+        # Latency distribution (if latency data available)
+        if "latency" in metrics:
+            self.plot_latency_distribution(metrics)
 
         logger.info(f"All plots saved to {self.output_dir}")
 

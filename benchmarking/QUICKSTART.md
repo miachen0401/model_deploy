@@ -27,7 +27,11 @@ Wait for "Uvicorn running on..." message.
 
 ```bash
 # Run complete evaluation on 100 samples
+# Model name is auto-detected from vLLM server
 uv run python -m benchmarking.evaluate_model --limit 100
+
+# Or explicitly specify model name if needed
+# uv run python -m benchmarking.evaluate_model --limit 100 --model-name models/your_model
 ```
 
 ## 📊 What You Get
@@ -47,10 +51,13 @@ uv run python -m benchmarking.visualize_results \
 ```
 
 Check `benchmarking/visualizations/` for:
-- Confusion matrix
-- Per-class metrics
-- ROC AUC comparison
-- Confidence distributions
+- Confusion matrix (normalized and raw counts)
+- Per-class metrics (precision, recall, F1, support)
+- ROC AUC comparison by category
+- Confidence distributions (overall and by correctness)
+- **Calibration curve** (reliability diagram with ECE)
+- **Confidence vs correctness** analysis (histograms and boxplots)
+- **Inference latency** distribution (p50, p90, p99 with tokens/sec)
 
 ## 📈 Sample Output
 
@@ -104,6 +111,11 @@ uv run python -m benchmarking.data_fetcher.supabase_client
 
 ### ❌ "vLLM server not available"
 → Start server: `bash start_vllm_server.sh`
+
+### ❌ "The model `model` does not exist"
+→ Model name is now auto-detected. If this fails, check available models:
+  `curl http://localhost:8000/v1/models`
+→ Or explicitly specify: `--model-name your_model_name`
 
 ### ❌ "JSON parsing errors"
 → Model output may be malformed, check logs in evaluation output

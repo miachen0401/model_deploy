@@ -225,6 +225,12 @@ def main():
         help="vLLM API URL",
     )
     parser.add_argument(
+        "--model-name",
+        type=str,
+        default=None,
+        help="Model name (if not specified, will auto-detect from server)",
+    )
+    parser.add_argument(
         "--skip-inference",
         action="store_true",
         help="Skip inference (use existing predictions file)",
@@ -252,17 +258,21 @@ def main():
         logger.info(f"Fetched {len(df)} labeled samples")
 
         # Step 2: Run inference (or load existing predictions)
+        latency_data = None
         if args.skip_inference and args.predictions_file:
             logger.info(f"Step 2: Loading predictions from {args.predictions_file}...")
             df_with_predictions = pd.read_csv(args.predictions_file)
         else:
             logger.info("Step 2: Running model inference...")
-            classifier = NewsClassifier(api_base_url=args.api_url)
+            classifier = NewsClassifier(
+                api_base_url=args.api_url,
+                model_name=args.model_name  # Will auto-detect if None
+            )
 
             def progress_callback(current, total):
                 logger.info(f"Progress: {current}/{total} samples classified")
 
-            df_with_predictions = classifier.classify_dataframe(
+            df_with_predictions, latency_data = classifier.classify_dataframe(
                 df,
                 batch_size=args.batch_size,
                 progress_callback=progress_callback,
@@ -282,6 +292,12 @@ def main():
         confidences = df_with_predictions["prediction_confidence"].tolist()
 
         metrics = evaluator.calculate_metrics(y_true, y_pred, confidences)
+
+        # Add latency data to metrics if available
+        if latency_data:
+            metrics["latency"] = latency_data
+            logger.info(f"Latency - Mean: {latency_data['mean_latency']:.3f}s, "
+                       f"Total: {latency_data['total_time']:.2f}s")
 
         # Step 4: Save results
         logger.info("Step 4: Saving results...")

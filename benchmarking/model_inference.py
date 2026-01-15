@@ -4,6 +4,7 @@ Model inference module for classifying news using deployed vLLM model.
 import logging
 import json
 import re
+import time
 from typing import List, Dict, Optional, Tuple
 import pandas as pd
 from openai import OpenAI
@@ -38,7 +39,7 @@ class NewsClassifier:
     def __init__(
         self,
         api_base_url: str = "http://localhost:8000/v1",
-        model_name: str = "model",
+        model_name: str = None,
         api_key: str = "EMPTY",
     ):
         """
@@ -46,10 +47,15 @@ class NewsClassifier:
 
         Args:
             api_base_url: Base URL for vLLM OpenAI-compatible API
-            model_name: Model name
+            model_name: Model name (if None, will auto-detect from server)
             api_key: API key (default "EMPTY" for local vLLM)
         """
         self.client = OpenAI(api_key=api_key, base_url=api_base_url)
+
+        # Auto-detect model name if not provided
+        if model_name is None:
+            model_name = self._detect_model_name()
+
         self.model_name = model_name
 
         # Load classification rules
@@ -60,6 +66,28 @@ class NewsClassifier:
             raise FileNotFoundError(f"Classification rules file not found: {self.RULES_FILE}")
 
         logger.info(f"NewsClassifier initialized (API: {api_base_url}, Model: {model_name})")
+
+    def _detect_model_name(self) -> str:
+        """
+        Auto-detect model name from vLLM server.
+
+        Returns:
+            Model name string
+
+        Raises:
+            RuntimeError: If no models are available
+        """
+        try:
+            models = self.client.models.list()
+            if models.data:
+                model_name = models.data[0].id
+                logger.info(f"Auto-detected model: {model_name}")
+                return model_name
+            else:
+                raise RuntimeError("No models available on server")
+        except Exception as e:
+            logger.error(f"Failed to auto-detect model: {e}")
+            raise RuntimeError(f"Could not auto-detect model from server: {e}")
 
     def _build_prompt(self, news_items: List[Dict[str, str]]) -> str:
         """
@@ -228,9 +256,9 @@ Output only the JSON array, no additional text."""
         df: pd.DataFrame,
         batch_size: int = 3,
         progress_callback=None,
-    ) -> pd.DataFrame:
+    ) -> Tuple[pd.DataFrame, Dict]:
         """
-        Classify news items from a DataFrame.
+        Classify news items from a DataFrame with latency tracking.
 
         Args:
             df: DataFrame with 'title' and 'summary' columns
@@ -238,12 +266,16 @@ Output only the JSON array, no additional text."""
             progress_callback: Optional callback function(current, total)
 
         Returns:
-            DataFrame with added prediction columns
+            Tuple of (DataFrame with added prediction columns, latency_data dict)
         """
         logger.info(f"Classifying {len(df)} news items in batches of {batch_size}")
 
         predictions = []
+        latencies = []
+        total_tokens = 0
         total_batches = (len(df) + batch_size - 1) // batch_size
+
+        start_time = time.time()
 
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i : i + batch_size]
@@ -252,13 +284,21 @@ Output only the JSON array, no additional text."""
                 for _, row in batch.iterrows()
             ]
 
+            # Track batch latency
+            batch_start = time.time()
             batch_predictions = self.classify_batch(batch_items)
+            batch_latency = time.time() - batch_start
+
             predictions.extend(batch_predictions)
+            latencies.append(batch_latency)
 
             if progress_callback:
                 progress_callback(i + len(batch), len(df))
 
+            logger.debug(f"Batch {i//batch_size + 1}/{total_batches} latency: {batch_latency:.3f}s")
             logger.info(f"Completed batch {i//batch_size + 1}/{total_batches}")
+
+        total_time = time.time() - start_time
 
         # Add predictions to DataFrame
         df_copy = df.copy()
@@ -266,7 +306,19 @@ Output only the JSON array, no additional text."""
         df_copy["predicted_symbol"] = [p["symbol"] for p in predictions]
         df_copy["prediction_confidence"] = [p["confidence"] for p in predictions]
 
-        return df_copy
+        # Compile latency statistics
+        latency_data = {
+            "per_batch": latencies,
+            "total_time": total_time,
+            "total_samples": len(df),
+            "mean_latency": sum(latencies) / len(latencies) if latencies else 0,
+            "total_batches": total_batches,
+        }
+
+        logger.info(f"Total inference time: {total_time:.2f}s for {len(df)} samples")
+        logger.info(f"Average batch latency: {latency_data['mean_latency']:.3f}s")
+
+        return df_copy, latency_data
 
 
 def main():
