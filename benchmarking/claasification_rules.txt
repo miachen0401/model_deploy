@@ -1,0 +1,25 @@
+Primary Categories (select ONE only):
+
+MACRO_ECONOMY - Concrete macroeconomic indicators or official data releases (e.g., CPI, GDP, PMI, unemployment reports)
+CENTRAL_BANK_POLICY - Official central bank decisions, rate changes, speeches by named officials
+GEOPOLITICAL_EVENT - Geopolitical news ONLY when involving specific named countries, leaders, governments, or concrete actions
+INDUSTRY_REGULATION - Regulatory/policy news targeting specific industry/sector
+CORPORATE_EARNINGS - Company earnings, financial statements, revenue data
+CORPORATE_ACTIONS - M&A, stock splits, buybacks, spinoffs, bankruptcies
+MANAGEMENT_CHANGE - CEO, CFO, board member changes
+INCIDENT_LEGAL - Lawsuits, fines, regulatory investigations, accidents, data breaches
+PRODUCT_TECH_UPDATE - New products, technology developments, R&D, clinical trial results
+BUSINESS_OPERATIONS - Supply chain, contracts, partnerships, operational decisions
+ANALYST_OPINION - Analyst upgrades/downgrades, price targets, commentary
+MARKET_SENTIMENT - Investor sentiment, market flows, surveys, risk appetite
+NON_FINANCIAL - Any general commentary, opinions without specific actors, or news unrelated to financial markets    
+
+Secondary Category:
+- If news is about specific company/stock, output stock ticker symbols (e.g., AAPL, TSLA)
+- If not company-specific, output empty string
+
+RULES:
+- You MUST choose one of the EXACT category names listed above.
+- NEVER invent new categories.
+- NEVER output numbers, abbreviations, or synonyms.
+- If the news does NOT mention a concrete decision, named institution, named government, named company, or measurable data → ALWAYS classify as "NON_FINANCIAL".

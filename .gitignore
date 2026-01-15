@@ -24,6 +24,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.pytest_cache/
 
 # Virtual environments
 .venv/

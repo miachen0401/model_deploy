@@ -4,7 +4,7 @@
 # Optimized for RTX 4080 (16GB VRAM)
 
 # Configuration for RTX 4080
-MODEL_PATH="model"
+MODEL_PATH="models"
 PORT=8000
 GPU_MEMORY_UTIL=0.90          # Use 90% of 16GB = ~14.4GB
 MAX_MODEL_LEN=4096            # Maximum context length

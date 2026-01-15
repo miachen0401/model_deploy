@@ -1,0 +1,27 @@
+GENERATION:
+  MAX_NEW_TOKENS: 512        # Maximum new tokens to generate (hard limit, prevents infinite generation)
+  DEFAULT_MAX_NEW_TOKENS: 64 # Default max_new_tokens for API requests
+  TIMEOUT_SECONDS: 60        # Timeout for generation requests (in seconds)
+  OCCUPANCY_SEMAPHORE: 1     # Maximum number of concurrent generation requests
+
+VLLM:
+  GPU_MEMORY_UTILIZATION: 0.90  # Use 90% of GPU memory (RTX 4080: ~14.4GB of 16GB)
+  MAX_MODEL_LEN: 4096           # Maximum context length
+  DTYPE: "bfloat16"             # Data type for inference (bfloat16 for Ampere+ GPUs)
+  TENSOR_PARALLEL_SIZE: 1       # Number of GPUs (1 for single 4080)
+  MAX_NUM_SEQS: 128             # Maximum concurrent sequences (optimized for 4080 with 2.5B model)
+  ENABLE_PREFIX_CACHING: true   # Enable prefix caching for better performance
+
+# RTX 4080 Optimization Notes:
+# - 2.5B model in bfloat16: ~5GB
+# - KV cache budget: ~9GB (with 90% utilization)
+# - Each sequence (4096 ctx): ~20-30MB
+# - Max concurrent: 128 sequences (conservative for stability)
+# - For higher concurrency (256+), reduce MAX_MODEL_LEN to 2048
+
+HUGGINGFACE_MODEL:
+  #NAME: "Hula0401/qwen-1.5b-finetuned-news1.0"
+  #NAME: "Qwen/Qwen3-4B-Instruct-2507"
+  #NAME: "Qwen/Qwen2.5-1.5B-Instruct"
+  NAME: "Qwen/Qwen2.5-7B-Instruct"
+  OUTPUT: "models/Qwen2.5-7B-Instruct"
